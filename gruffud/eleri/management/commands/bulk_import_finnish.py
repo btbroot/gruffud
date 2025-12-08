@@ -29,7 +29,7 @@ from re import compile
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from eleri.models import Language, Word
+from eleri.models import Word
 
 
 INPUT = (
@@ -44,38 +44,42 @@ FORM = 'form'
 FREQ = 'freq'
 RE = rf'\d+ \d+ (?P<{FORM}>[\w\-:]+) \((?P<{FREQ}>\d+\.\d+(?:e-\d+)?)'
 TRASH = 'bulk_import_finnish_trash'
+LANG= 'fi'
+
 
 class Command(BaseCommand):
     help = 'Import Finnish words from corpus file'
 
     def handle(self, *args, **options):
         regexp = compile(RE)
-        fi_lang, _ = Language.objects.get_or_create(
-            code='fi',
-            defaults={'name': 'Finnish'},
-        )
-        bulk = []
+        bulk = {}
         with (
-            open(file=INPUT, encoding=ENCODING) as f,
-            open(file=TRASH, mode='w') as t,
+            open(file=INPUT, encoding=ENCODING) as ingress,
+            open(file=TRASH, mode='w') as trash,
         ):
-            for i, line in enumerate(iterable=f, start=1):
+            for index, line in enumerate(iterable=ingress, start=1):
                 groups = regexp.search(line)
                 if not groups:
                     self.stdout.write(
-                        self.style.WARNING(f'Line {i} did not parse.')
+                        self.style.WARNING(f'Line {index} did not parse.')
                     )
-                    print(line.strip(), file=t)
+                    print(line.strip(), file=trash)
                     continue
-                bulk.append(
-                    Word(
-                        language=fi_lang,
-                        form=groups[FORM],
-                        frequency=float(groups[FREQ]) / 100,
+                if groups[FORM] in bulk:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f'Line {index} duplicated word {groups[FORM]}.'
+                        )
                     )
+                    print(line.strip(), file=trash)
+                    continue
+                bulk[groups[FORM]] = Word(
+                    language=LANG,
+                    form=groups[FORM],
+                    frequency=float(groups[FREQ]) / 100,
                 )
         if bulk:
             self.stdout.write(f'Bulk creating.')
             with transaction.atomic():
-                Word.objects.bulk_create(objs=bulk, ignore_conflicts=True)
+                Word.objects.bulk_create(bulk.values())
         self.stdout.write(self.style.SUCCESS('Import finished'))

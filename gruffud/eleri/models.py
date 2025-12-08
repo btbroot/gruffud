@@ -1,187 +1,165 @@
 '''
-Django models for the Eleri app.
+Eleri data models for managing linguistic information.
 
-This module defines the database schema for a multilingual dictionary and
-phrasebook. It supports multiple source and target languages, and captures the
-following entities:
+This module defines models for storing and organizing multilingual lexical
+data. The models provide a comprehensive structure for managing languages,
+word meanings, canonical word forms, word frequencies, sentences, and their
+translations.
 
-- Language: ISO code and human-readable name for supported languages.
-- Word: Individual word forms tied to a language, with frequency counts.
-- TranslationVariant: Links between source words and their possible target word
-  translations.
-- Phrase: Sample phrases tied to a language.
-- PhraseTranslation: Links between source phrases
-  and their translated equivalents.
+The models are designed to maintain referential integrity through foreign key
+relationships and enforce uniqueness constraints to prevent data duplication.
 
-The design emphasizes modularity and reusability:
-- Languages are stored as independent records, allowing expansion.
-- Words can be linked to multiple translations and sample phrases.
-- Phrases are paired with translated phrases for contextual examples.
-
-These models form the foundation for building a flexible multilingual lexicon,
-supporting both word-level and phrase-level translation data.
+Models:
+    Sense: Represents word meanings or definitions.
+    Lemma: Represents canonical forms of words in specific languages.
+    Word: Represents actual word forms in languages with frequency tracking.
+    Sentence: Represents sentences in specific languages with word and
+    translation mappings.
 '''
 
 from django.conf import settings
 from django.db import models
 
 
-class Language(models.Model):
+class Sense(models.Model):
     '''
-    Represents a natural language supported by the dictionary.
+    Represents a sense or meaning of a word.
 
-    Each Language record stores a short ISO 639-1 code (e.g., 'fi' for Finnish,
-    'ru' for Russian) and a human-readable name. Words and phrases reference
-    this model to indicate the language they belong to, ensuring consistency
-    across translations.
-
-    This model provides the foundation for linking source and target languages
-    in word-level and phrase-level translation mappings.
+    Attributes:
+        text (TextField): The textual description or definition of the sense,
+        e.g. a word's meaning or definition.
     '''
-    code = models.CharField(
+
+    text = models.TextField()
+
+
+class Lemma(models.Model):
+    '''
+    Represents a lexical lemma in a specific language.
+
+    A lemma is a unique combination of a language, headword, and optionally a
+    sense. It serves as an entry point in a lexicon and provides a referential
+    integrity with the Language and Sense models.
+
+    Attributes:
+        headword (CharField): The canonical form of the word.
+        language (ForeignKey): Reference to the Language model this lemma
+        belongs to.
+        sense (ForeignKey): Optional reference to the Sense model representing
+        the meaning of this lemma.
+
+    Constraints:
+        - The combination of language, headword, and sense must be unique.
+    '''
+
+    language = models.CharField(
         max_length=10,
-        unique=True,
         choices=settings.LANGUAGES,
     )
-    name = models.CharField(max_length=100)
+    headword = models.CharField(max_length=100)
+    sense = models.ForeignKey(
+        to=Sense,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
 
     def __str__(self):
-        return self.name
+        return f'({self.language}) {self.headword}'
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(
+                fields=('language', 'headword', 'sense'),
+                name='unique_lemma',
+            ),
+        )
 
 
 class Word(models.Model):
     '''
-    Represents a word form in a specific language.
+    A word in a specific language, tracking its frequency and optionally its
+    lemma.
 
-    Each Word record stores:
-    - The language it belongs to (via ForeignKey to Language).
-    - The actual word form (inflected or variant).
-    - A frequency value indicating how often this form occurs in a corpus.
+    Attributes:
+        language (ForeignKey): The language this word belongs to.
+        form (CharField): The written form of the word.
+        frequency (FloatField, optional): The frequency score or count of the
+        word's usage.
+        lemma (ForeignKey, optional): The base word this word derives from.
 
-    Words can be linked to:
-    - TranslationVariant records, which connect source words to target words.
-    - Sample phrases, providing contextual usage examples.
-
-    This model supports both raw frequency counts and normalized values,
-    enabling analysis of word usage across languages.
+    Constraints:
+        - A unique combination of language, form, and lemma.
+        - A unique combination of language, form (without a lemma).
+        - If the related lemma is deleted, the lemma reference is set to NULL (SET_NULL).
     '''
-    language = models.ForeignKey(
-        to=Language,
-        on_delete=models.CASCADE,
+
+    language = models.CharField(
+        max_length=10,
+        choices=settings.LANGUAGES,
+        db_index=True,
     )
     form = models.CharField(max_length=100)
-    frequency = models.DecimalField(
-        max_digits=20,
-        decimal_places=15,
-        default=0,
+    frequency = models.FloatField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    lemma = models.ForeignKey(
+        to=Lemma,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
     )
 
     def __str__(self):
-        return f'{self.form} ({self.language.code})'
+        return f'({self.language}) {self.form}'
 
     class Meta:
-        unique_together = (
-            'language',
-            'form',
-        )
-        indexes = [models.Index(fields=['frequency'])]
-
-class TranslationVariant(models.Model):
-    '''
-    Represents a translation link between two word forms.
-
-    Each TranslationVariant connects:
-    - A source word (in the source language).
-    - A target word (in the target language).
-
-    This model allows multiple translation variants for a single source word,
-    reflecting the fact that words often have more than one possible equivalent
-    in another language. It also supports reverse lookups, so you can query
-    which source words map to a given target word.
-
-    Example:
-        Finnish word 'kissa' (cat) → Russian word 'кошка'
-        Finnish word 'kissa' (cat) → Russian word 'кот'
-    '''
-    source_word = models.ForeignKey(
-        to=Word,
-        on_delete=models.CASCADE,
-    )
-    target_word = models.ForeignKey(
-        to=Word,
-        on_delete=models.CASCADE,
-        related_name='target_translationvariant_set',
-    )
-
-    def __str__(self):
-        return f'{self.source_word} → {self.target_word}'
-
-    class Meta:
-        unique_together = (
-            'source_word',
-            'target_word',
+        constraints = (
+            models.UniqueConstraint(
+                fields=('language', 'form', 'lemma'),
+                name='unique_word',
+            ),
+            models.UniqueConstraint(
+                fields=('language', 'form'),
+                condition=models.Q(lemma__isnull=True),
+                name='unique_word_without_lemma',
+            ),
         )
 
-class Phrase(models.Model):
+class Sentence(models.Model):
     '''
-    Represents a sample phrase in a specific language.
+    Represents a sentence in a specific language.
 
-    Each Phrase record stores:
-    - The language it belongs to (via ForeignKey to Language).
-    - The phrase text itself.
+    Attributes:
+        language (CharField): The language of the sentence.
+        text (TextField): The full text content of the sentence.
+        words (ManyToManyField): Many-to-many relationship with Word model,
+            representing individual words contained in this sentence.
+        translation (ManyToManyField): Self-referential many-to-many
+            relationship for linking sentences that are translations of each
+            other.
 
-    Phrases provide contextual examples of word usage and can be linked to
-    translated phrases through the PhraseTranslation model. They may also be
-    associated with individual words to illustrate how those words appear in
-    natural language contexts.
-
-    Example:
-        Finnish phrase: 'Minulla on kissa.'
-        Russian phrase: 'У меня есть кошка.'
+    Constraints:
+        - The combination of language and text must be unique.
     '''
-    language = models.ForeignKey(
-        to=Language,
-        on_delete=models.CASCADE,
+
+    language = models.CharField(
+        max_length=10,
+        choices=settings.LANGUAGES,
     )
     text = models.TextField()
-    words = models.ManyToManyField(Word)
+    words = models.ManyToManyField(to=Word, blank=True)
+    translation = models.ManyToManyField(to='self', blank=True)
 
     def __str__(self):
-        return f'{self.text[:50]}...'
-
-
-class PhraseTranslation(models.Model):
-    '''
-    Represents a translation link between two phrases.
-
-    Each PhraseTranslation connects:
-    - A source phrase (in the source language).
-    - A target phrase (in the target language).
-
-    This model allows you to store parallel phrase pairs, providing contextual
-    examples of how words and expressions are used across languages. It supports
-    multiple translations for a single source phrase, reflecting natural variation
-    in phrasing and usage.
-
-    Example:
-        Source phrase (Finnish): 'Minulla on kissa.'
-        Target phrase (Russian): 'У меня есть кошка.'
-    '''
-    source_phrase = models.ForeignKey(
-        to=Phrase,
-        on_delete=models.CASCADE,
-    )
-    target_phrase = models.ForeignKey(
-        to=Phrase,
-        on_delete=models.CASCADE,
-        related_name='target_phrasetranslation_set',
-    )
-
-    def __str__(self):
-        return f'{self.source_phrase} → {self.target_phrase}'
+        return f'({self.language}) {self.text[:50]}...'
 
     class Meta:
-        unique_together = (
-            'source_phrase',
-            'target_phrase',
+        constraints = (
+            models.UniqueConstraint(
+                fields=('language', 'text'),
+                name='unique_sentence',
+            ),
         )
