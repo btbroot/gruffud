@@ -1,5 +1,5 @@
 .ipython_history/
 __pycache__/
-db.sqlite3
-gruffud/bulk_import_finnish_trash
 .env
+*.sqlite3
+*.log

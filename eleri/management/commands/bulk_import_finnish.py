@@ -43,7 +43,7 @@ ENCODING = 'latin-1'
 FORM = 'form'
 FREQ = 'freq'
 RE = rf'\d+ \d+ (?P<{FORM}>[\w\-:]+) \((?P<{FREQ}>\d+\.\d+(?:e-\d+)?)'
-TRASH = 'bulk_import_finnish_trash'
+TRASH = 'bulk_import_finnish_trash.log'
 LANG= 'fi'
 
 
