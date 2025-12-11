@@ -149,12 +149,15 @@ class Sentence(models.Model):
         max_length=10,
         choices=settings.LANGUAGES,
     )
-    text = models.TextField()
+    text = models.CharField(max_length=255)
     words = models.ManyToManyField(to=Word, blank=True)
-    translation = models.ManyToManyField(to='self', blank=True)
+    translations = models.ManyToManyField(
+        to='self',
+        blank=True,
+    )
 
     def __str__(self):
-        return f'({self.language}) {self.text[:50]}...'
+        return f'({self.language}) {self.text}'
 
     class Meta:
         constraints = (

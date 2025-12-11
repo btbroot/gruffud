@@ -23,7 +23,7 @@ class SentenceAdmin(admin.ModelAdmin):
             as raw IDs in the admin interface.
     '''
 
-    raw_id_fields = ('words', 'translation')
+    raw_id_fields = ('words', 'translations')
 
 
 admin.site.register(Sentence, SentenceAdmin)

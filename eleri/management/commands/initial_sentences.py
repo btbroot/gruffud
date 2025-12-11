@@ -14,7 +14,7 @@ Example usage:
 This will generate sentences for the Finnish-Russian language pair.
 '''
 
-from json import loads
+from json import dump, loads
 from django.db import transaction
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -36,6 +36,7 @@ SYSTEM_PROMPT = '''
     }}
 '''
 BATCH = 100
+LAST = 'initial_sentences_last.json'
 
 
 class Command(BaseCommand):
@@ -94,49 +95,22 @@ class Command(BaseCommand):
                     ],
                 ).choices[0].message.content
             )
-            sentences = []
-            translations = []
+            dump(obj=data, fp=open(LAST, 'w'), ensure_ascii=False, indent=2)
             for word in words_batch:
-                sentence = Sentence(
-                    language=options['first_language'],
-                    text=data[word.form]['original_sentence'],
-                )
-                translation = Sentence(
-                    language=options['second_language'],
-                    text=data[word.form]['translated_sentence'],
-                )
-                sentences.append(sentence)
-                translations.append(translation)
-            with transaction.atomic():
-                Sentence.objects.bulk_create(sentences + translations)
-                sentence_word = Sentence.words.through
-                sentence_word.objects.bulk_create(
-                    (
-                        sentence_word(
-                            sentence=sentence,
-                            word=word,
+                self.stdout.write(f'Creating sentences for {word.form}')
+                with transaction.atomic():
+                    sentence, created = (
+                        Sentence.objects.get_or_create(
+                            language=options['first_language'],
+                            text=data[word.form]['original_sentence'],
                         )
-                        for sentence, word in zip(sentences, words_batch)
                     )
-                )
-                sentence_translation = Sentence.translation.through
-                sentence_translation.objects.bulk_create(
-                    (
-                        sentence_translation(
-                            from_sentence=sentence,
-                            to_sentence=translation,
+                    translation, created = (
+                        Sentence.objects.get_or_create(
+                            language=options['second_language'],
+                            text=data[word.form]['translated_sentence'],
                         )
-                        for sentence, translation
-                        in zip(sentences, translations)
                     )
-                )
-                sentence_translation.objects.bulk_create(
-                    (
-                        sentence_translation(
-                            from_sentence=translation,
-                            to_sentence=sentence,
-                        )
-                        for sentence, translation
-                        in zip(sentences, translations)
-                    )
-                )
+                    sentence.translations.add(translation)
+                    translation.translations.add(sentence)
+                    sentence.words.add(word)
