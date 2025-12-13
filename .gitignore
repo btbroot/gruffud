@@ -4,3 +4,4 @@ __pycache__/
 *.sqlite3
 *.log
 initial_sentences_last.json
+*.apkg
