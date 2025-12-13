@@ -1,3 +1,5 @@
+from locale import normalize
+
 from django.core.management.base import BaseCommand
 from genanki import Deck, Model, Note, Package
 from pydash import order_by
@@ -27,6 +29,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        locale = normalize(options['first_language']).split('.')[0]
         model = Model(
             model_id=MODEL_ID,
             name='Eleri Default Model',
@@ -38,15 +41,24 @@ class Command(BaseCommand):
             ],
             templates=[
                 {
-                    'name': 'Eleri Default Template',
-                    'qfmt': '''
-                        {{Sentence}}
-                        <hr id="meta">
-                        {{Word}} ({{Frequency}})
+                    'name': 'Eleri Default Note',
+                    'qfmt': f'''
+                        <div class="meta">{{{{Word}}}} ({{{{Frequency}}}})</div>
+                        <hr>
+                        {{{{Sentence}}}}
+                        <br>
+                        {{{{tts {locale}:Sentence}}}}
                     ''',
-                    'afmt': '{{FrontSide}}<hr id="answer">{{Translation}}',
+                    'afmt': '{{FrontSide}}<hr>{{Translation}}',
                 },
             ],
+            css='''
+                .meta{
+                    font-size: smaller;
+                    font-style: italic;
+                    color: gray;
+                }
+            '''
         )
         deck = Deck(deck_id=DECK_ID, name='Eleri Default Deck')
         count = 0
