@@ -35,9 +35,10 @@ SYSTEM_PROMPT = '''
         ...
     }}
 '''
-BATCH = 100
-LAST = 'initial_sentences_last.json'
+BATCH_SIZE = 100
+LAST_DATA = 'initial_sentences_last.json'
 RATE_LIMIT_ERROR = 2
+JSON_INDENT = 2
 
 
 class Command(BaseCommand):
@@ -68,7 +69,7 @@ class Command(BaseCommand):
             return
         client = OpenAI(base_url=settings.OPENAI_API_BASE_URL)
         count = words.count()
-        batch_size = BATCH if BATCH else count
+        batch_size = BATCH_SIZE if BATCH_SIZE else count
         for index in range(0, count, batch_size):
             self.stdout.write(f'Generating batch of {batch_size} from {index}.')
             words_batch = words[index:index + batch_size]
@@ -106,7 +107,12 @@ class Command(BaseCommand):
                     continue
                 break
             data = loads(resp.choices[0].message.content)
-            dump(obj=data, fp=open(LAST, 'w'), ensure_ascii=False, indent=2)
+            dump(
+                obj=data,
+                fp=open(LAST_DATA, 'w'),
+                ensure_ascii=False,
+                indent=JSON_INDENT,
+            )
             for word in words_batch:
                 if word.form in data and data:
                     self.stdout.write(f'Creating sentences for {word.form}')

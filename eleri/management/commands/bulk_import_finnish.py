@@ -40,9 +40,9 @@ INPUT = (
     'parole_frek.txt'
 )
 ENCODING = 'latin-1'
-FORM = 'form'
-FREQ = 'freq'
-RE = rf'\d+ \d+ (?P<{FORM}>[\w\-:]+) \((?P<{FREQ}>\d+\.\d+(?:e-\d+)?)'
+FORM_FIELD = 'form'
+FREQ_FIELD = 'freq'
+RE = rf'\d+ \d+ (?P<{FORM_FIELD}>[\w\-:]+) \((?P<{FREQ_FIELD}>\d+\.\d+(?:e-\d+)?)'
 TRASH = 'bulk_import_finnish_trash.log'
 LANG= 'fi'
 
@@ -65,18 +65,18 @@ class Command(BaseCommand):
                     )
                     print(line.strip(), file=trash)
                     continue
-                if groups[FORM] in bulk:
+                if groups[FORM_FIELD] in bulk:
                     self.stdout.write(
                         self.style.WARNING(
-                            f'Line {index} duplicated word {groups[FORM]}.'
+                            f'Line {index} duplicated {groups[FORM_FIELD]}.'
                         )
                     )
                     print(line.strip(), file=trash)
                     continue
-                bulk[groups[FORM]] = Word(
+                bulk[groups[FORM_FIELD]] = Word(
                     language=LANG,
-                    form=groups[FORM],
-                    frequency=float(groups[FREQ]) / 100,
+                    form=groups[FORM_FIELD],
+                    frequency=float(groups[FREQ_FIELD]) / 100,
                 )
         if bulk:
             self.stdout.write(f'Bulk creating.')
