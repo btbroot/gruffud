@@ -17,9 +17,8 @@ This will generate sentences for the Finnish-Russian language pair.
 from json import dump, loads
 from django.db import transaction
 from django.conf import settings
-from django.core.management.base import BaseCommand
-from openai import OpenAI
-from regex import W
+from django.core.management.base import BaseCommand, CommandError
+from openai import InternalServerError, OpenAI, RateLimitError
 from eleri.models import Sentence, Word
 
 
@@ -38,6 +37,7 @@ SYSTEM_PROMPT = '''
 '''
 BATCH = 100
 LAST = 'initial_sentences_last.json'
+RATE_LIMIT_ERROR = 2
 
 
 class Command(BaseCommand):
@@ -72,30 +72,40 @@ class Command(BaseCommand):
         for index in range(0, count, batch_size):
             self.stdout.write(f'Generating batch of {batch_size} from {index}.')
             words_batch = words[index:index + batch_size]
-            data = loads(
-                client.chat.completions.create(
-                    model=settings.OPENAI_API_MODEL,
-                    messages=[
-                        {
-                            'role': 'system',
-                            'content': SYSTEM_PROMPT.format(
-                                first_language=languages[
-                                    options['first_language']
-                                ],
-                                second_language=languages[
-                                    options['second_language']
-                                ],
-                            ),
-                        },
-                        {
-                            'role': 'user',
-                            'content': '\n'.join(
-                                [word.form for word in words_batch]
-                            ),
-                        },
-                    ],
-                ).choices[0].message.content
-            )
+            while ...:
+                try:
+                    resp = client.chat.completions.create(
+                        model=settings.OPENAI_API_MODEL,
+                        messages=[
+                            {
+                                'role': 'system',
+                                'content': SYSTEM_PROMPT.format(
+                                    first_language=languages[
+                                        options['first_language']
+                                    ],
+                                    second_language=languages[
+                                        options['second_language']
+                                    ],
+                                ),
+                            },
+                            {
+                                'role': 'user',
+                                'content': '\n'.join(
+                                    [word.form for word in words_batch]
+                                ),
+                            },
+                        ],
+                    )
+                except RateLimitError as exception:
+                    raise CommandError(
+                        str(exception),
+                        returncode=RATE_LIMIT_ERROR,
+                    )
+                except InternalServerError as exception:
+                    self.stdout.write(self.style.ERROR(str(exception)))
+                    continue
+                break
+            data = loads(resp.choices[0].message.content)
             dump(obj=data, fp=open(LAST, 'w'), ensure_ascii=False, indent=2)
             for word in words_batch:
                 if word.form in data and data:
