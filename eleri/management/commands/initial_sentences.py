@@ -19,6 +19,7 @@ from django.db import transaction
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from openai import OpenAI
+from regex import W
 from eleri.models import Sentence, Word
 
 
@@ -97,7 +98,13 @@ class Command(BaseCommand):
             )
             dump(obj=data, fp=open(LAST, 'w'), ensure_ascii=False, indent=2)
             for word in words_batch:
-                self.stdout.write(f'Creating sentences for {word.form}')
+                if word.form in data and data:
+                    self.stdout.write(f'Creating sentences for {word.form}')
+                else:
+                    self.stdout.write(
+                        self.style.WARNING(f'No data for {word.form}')
+                    )
+                    continue
                 with transaction.atomic():
                     sentence, created = (
                         Sentence.objects.get_or_create(
