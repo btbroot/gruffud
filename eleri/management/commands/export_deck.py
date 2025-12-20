@@ -1,5 +1,6 @@
 from locale import normalize
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from genanki import Deck, Model, Note, Package
 from pydash import order_by
@@ -7,10 +8,7 @@ from pydash import order_by
 from eleri.models import Word
 
 
-DECK_ID = 2059400110
-MODEL_ID = 1607392319
 OUTPUT = 'eleri.apkg'
-
 
 
 class Command(BaseCommand):
@@ -31,7 +29,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         locale = normalize(options['first_language']).split('.')[0]
         model = Model(
-            model_id=MODEL_ID,
+            model_id=settings['MODEL_ID'],
             name='Eleri Default Model',
             fields=[
                 {'name': 'Word'},
@@ -60,7 +58,7 @@ class Command(BaseCommand):
                 }
             '''
         )
-        deck = Deck(deck_id=DECK_ID, name='Eleri Default Deck')
+        deck = Deck(deck_id=settings['DECK_ID'], name='Eleri Default Deck')
         count = 0
         for word in Word.objects.filter(
             language=options['first_language'],

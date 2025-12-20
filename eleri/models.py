@@ -155,6 +155,7 @@ class Sentence(models.Model):
         to='self',
         blank=True,
     )
+    source = models.CharField(max_length=100)
 
     def __str__(self):
         return f'({self.language}) {self.text}'

@@ -1,24 +1,20 @@
 '''
-This command generates an initial set of sentences for a language pair.
+This command generates an initial set of lemmas and senses for a word form.
 
-It uses the Words in the first language (ordered by frequency) to generate
-sentences (with linked words), translating them into the second language.
-
-It processes words in batches, bulk creating the sentences and their
-translations.
+It processes words in batches, bulk creating the lemmas and senses.
 
 Example usage:
 
-    manage.py initial_sentences fi ru
+    manage.py initial_lemmas
 
 This will generate sentences for the Finnish-Russian language pair.
 '''
 
-from json import JSONDecodeError, loads
+from json import dump, loads
 from django.db import transaction
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from openai import APIStatusError, InternalServerError, OpenAI, RateLimitError
+from openai import InternalServerError, OpenAI, RateLimitError
 from eleri.models import Sentence, Word
 
 
@@ -29,14 +25,15 @@ SYSTEM_PROMPT = '''
     following template:
     {{
         form: {{
-                'original_sentence': str,
-                'translated_sentence': str
+                "original_sentence": str,
+                "translated_sentence": str
         }},
         ...
     }}
 '''
 BATCH_SIZE = 100
-USER_ERROR = 2
+LAST_DATA = 'initial_sentences_last.json'
+RATE_LIMIT_ERROR = 2
 JSON_INDENT = 2
 
 
@@ -90,45 +87,47 @@ class Command(BaseCommand):
                             },
                             {
                                 'role': 'user',
-                                'content': str([
-                                    word.form for word in words_batch
-                                ]),
+                                'content': '\n'.join(
+                                    [word.form for word in words_batch]
+                                ),
                             },
                         ],
                     )
-                except (RateLimitError, APIStatusError) as exception:
-                    raise CommandError(str(exception), returncode=USER_ERROR)
+                except RateLimitError as exception:
+                    raise CommandError(
+                        str(exception),
+                        returncode=RATE_LIMIT_ERROR,
+                    )
                 except InternalServerError as exception:
                     self.stdout.write(self.style.ERROR(str(exception)))
                     continue
                 break
-            content = (
-                resp.choices[0].message.content.strip('```json').strip('```')
+            data = loads(resp.choices[0].message.content)
+            dump(
+                obj=data,
+                fp=open(LAST_DATA, 'w'),
+                ensure_ascii=False,
+                indent=JSON_INDENT,
             )
-            try:
-                data = loads(content)
-            except JSONDecodeError as exception:
-                raise CommandError(f'Could not parse response: {content}')
             for word in words_batch:
-                if word.form not in data:
+                if word.form in data and data:
+                    self.stdout.write(f'Creating sentences for {word.form}')
+                else:
                     self.stdout.write(
                         self.style.WARNING(f'No data for {word.form}')
                     )
                     continue
-                self.stdout.write(f'Creating sentences for {word.form}')
                 with transaction.atomic():
                     sentence, created = (
                         Sentence.objects.get_or_create(
                             language=options['first_language'],
                             text=data[word.form]['original_sentence'],
-                            source=settings.OPENAI_API_MODEL,
                         )
                     )
                     translation, created = (
                         Sentence.objects.get_or_create(
                             language=options['second_language'],
                             text=data[word.form]['translated_sentence'],
-                            source=settings.OPENAI_API_MODEL,
                         )
                     )
                     sentence.translations.add(translation)
