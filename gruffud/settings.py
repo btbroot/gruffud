@@ -136,7 +136,3 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 OPENAI_API_BASE_URL = 'https://api.electronhub.ai/v1'
 #OPENAI_API_MODEL = 'gemini-2.5-flash:free'
 OPENAI_API_MODEL = 'gpt-4.1'
-
-# Anki settings
-DECK_ID = 2059400110
-MODEL_ID = 1607392319

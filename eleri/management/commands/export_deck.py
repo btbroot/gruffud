@@ -8,7 +8,9 @@ from pydash import order_by
 from eleri.models import Word
 
 
-OUTPUT = 'eleri.apkg'
+OUTPUT = 'eleri-{id}.apkg'
+MODEL_ID = 1607392319
+DECK_ID = {'fi': 2059400110, 'en': 2059400111 }
 
 
 class Command(BaseCommand):
@@ -27,9 +29,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        output = OUTPUT.format(id=DECK_ID[options['first_language']])
         locale = normalize(options['first_language']).split('.')[0]
         model = Model(
-            model_id=settings['MODEL_ID'],
+            model_id=MODEL_ID,
             name='Eleri Default Model',
             fields=[
                 {'name': 'Word'},
@@ -58,12 +61,21 @@ class Command(BaseCommand):
                 }
             '''
         )
-        deck = Deck(deck_id=settings['DECK_ID'], name='Eleri Default Deck')
+        name = (
+            'Eleri ' +
+            options["first_language"] +
+            '-' +
+            options["second_language"]
+        )
+        deck = Deck(
+            deck_id=DECK_ID[options['first_language']],
+            name=name,
+        )
         count = 0
         for word in Word.objects.filter(
             language=options['first_language'],
             sentence__translations__language=options['second_language'],
-        ).order_by('-frequency'):
+        ).order_by('-frequency', '-lemma__frequency'):
             deck.add_note(
                 Note(
                     model=model,
@@ -76,7 +88,7 @@ class Command(BaseCommand):
                 )
             )
             count += 1
-        Package(deck).write_to_file(OUTPUT)
+        Package(deck).write_to_file(output)
         self.stdout.write(
-            self.style.SUCCESS(f"Exported {count} notes to {OUTPUT}")
+            self.style.SUCCESS(f"Exported {count} notes to {output}")
         )
