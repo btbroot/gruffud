@@ -60,7 +60,7 @@ class Command(BaseCommand):
         words = Word.objects.filter(
             language=options['first_language'],
             sentence__isnull=True,
-        ).order_by('-frequency')
+        ).order_by('-frequency', '-lemma__frequency')
         if words.count() == 0:
             self.stdout.write(
                 self.style.WARNING('No words to generate sentences for')
