@@ -18,10 +18,22 @@ Models:
 '''
 
 from django.conf import settings
-from django.db import models
+from django.db.models import (
+    CASCADE,
+    CharField,
+    FloatField,
+    ForeignKey,
+    IntegerField,
+    ManyToManyField,
+    Model,
+    Q,
+    SET_NULL,
+    TextField,
+    UniqueConstraint,
+)
 
 
-class Sense(models.Model):
+class Sense(Model):
     '''
     Represents a sense or meaning of a word.
 
@@ -30,10 +42,10 @@ class Sense(models.Model):
         e.g. a word's meaning or definition.
     '''
 
-    text = models.TextField()
+    text = TextField()
 
 
-class Lemma(models.Model):
+class Lemma(Model):
     '''
     Represents a lexical lemma in a specific language.
 
@@ -52,14 +64,19 @@ class Lemma(models.Model):
         - The combination of language, headword, and sense must be unique.
     '''
 
-    language = models.CharField(
+    language = CharField(
         max_length=10,
         choices=settings.LANGUAGES,
     )
-    headword = models.CharField(max_length=100)
-    sense = models.ForeignKey(
+    headword = CharField(max_length=100)
+    frequency = IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    sense = ForeignKey(
         to=Sense,
-        on_delete=models.SET_NULL,
+        on_delete=SET_NULL,
         null=True,
         blank=True,
     )
@@ -69,14 +86,14 @@ class Lemma(models.Model):
 
     class Meta:
         constraints = (
-            models.UniqueConstraint(
+            UniqueConstraint(
                 fields=('language', 'headword', 'sense'),
                 name='unique_lemma',
             ),
         )
 
 
-class Word(models.Model):
+class Word(Model):
     '''
     A word in a specific language, tracking its frequency and optionally its
     lemma.
@@ -94,20 +111,20 @@ class Word(models.Model):
         - If the related lemma is deleted, the lemma reference is set to NULL (SET_NULL).
     '''
 
-    language = models.CharField(
+    language = CharField(
         max_length=10,
         choices=settings.LANGUAGES,
         db_index=True,
     )
-    form = models.CharField(max_length=100)
-    frequency = models.FloatField(
+    form = CharField(max_length=100)
+    frequency = FloatField(
         null=True,
         blank=True,
         db_index=True,
     )
-    lemma = models.ForeignKey(
+    lemma = ForeignKey(
         to=Lemma,
-        on_delete=models.SET_NULL,
+        on_delete=SET_NULL,
         null=True,
         blank=True,
     )
@@ -117,18 +134,18 @@ class Word(models.Model):
 
     class Meta:
         constraints = (
-            models.UniqueConstraint(
+            UniqueConstraint(
                 fields=('language', 'form', 'lemma'),
                 name='unique_word',
             ),
-            models.UniqueConstraint(
+            UniqueConstraint(
                 fields=('language', 'form'),
-                condition=models.Q(lemma__isnull=True),
+                condition=Q(lemma__isnull=True),
                 name='unique_word_without_lemma',
             ),
         )
 
-class Sentence(models.Model):
+class Sentence(Model):
     '''
     Represents a sentence in a specific language.
 
@@ -145,24 +162,21 @@ class Sentence(models.Model):
         - The combination of language and text must be unique.
     '''
 
-    language = models.CharField(
+    language = CharField(
         max_length=10,
         choices=settings.LANGUAGES,
     )
-    text = models.CharField(max_length=255)
-    words = models.ManyToManyField(to=Word, blank=True)
-    translations = models.ManyToManyField(
-        to='self',
-        blank=True,
-    )
-    source = models.CharField(max_length=100)
+    text = CharField(max_length=255)
+    words = ManyToManyField(to=Word, blank=True)
+    translations = ManyToManyField(to='self', blank=True )
+    source = CharField(max_length=100)
 
     def __str__(self):
         return f'({self.language}) {self.text}'
 
     class Meta:
         constraints = (
-            models.UniqueConstraint(
+            UniqueConstraint(
                 fields=('language', 'text'),
                 name='unique_sentence',
             ),
