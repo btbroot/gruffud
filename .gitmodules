@@ -1,3 +1,6 @@
 [submodule "data/Frequency-List-of-Written-Finnish-Word-Forms"]
 	path = data/Frequency-List-of-Written-Finnish-Word-Forms
 	url = https://github.com/btbroot/Frequency-List-of-Written-Finnish-Word-Forms.git
+[submodule "data/Frequency-and-Coverage-of-Top-100-Phrasal-Verb-Lemmas-in-BNC"]
+	path = data/Frequency-and-Coverage-of-Top-100-Phrasal-Verb-Lemmas-in-BNC
+	url = https://github.com/btbroot/Frequency-and-Coverage-of-Top-100-Phrasal-Verb-Lemmas-in-BNC.git
