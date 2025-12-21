@@ -128,6 +128,7 @@ class Word(Model):
         null=True,
         blank=True,
     )
+    source = CharField(max_length=100)
 
     def __str__(self):
         return f'({self.language}) {self.form}'
