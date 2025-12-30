@@ -1,94 +1,109 @@
+from hashlib import sha256
 from locale import normalize
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from genanki import Deck, Model, Note, Package
-from pydash import order_by
+from regex import TEMPLATE
 
+from eleri import VERSION
 from eleri.models import Word
 
 
-OUTPUT = 'eleri-{id}.apkg'
-MODEL_ID = 1607392319
-DECK_ID = {'fi': 2059400110, 'en': 2059400111 }
+DECKS = [
+    'eleri_deck_frequency_list-fi_ru',
+    'eleri_deck_phrasal_verbs-en_ru',
+]
+LANG1 = '''
+    <div class="meta">{{{{Word}}}} ({{{{Frequency}}}})<hr></div>
+    {{{{Sentence}}}}<br>{{{{tts {locale}:Sentence}}}}
+'''
+LANG2 = '{{{{Translation}}}}'
+MODEL = 'eleri_model-{language}-0.1'
+TEMPLATE = {
+    'fields': [
+        {'name': 'Word'},
+        {'name': 'Frequency'},
+        {'name': 'Sentence'},
+        {'name': 'Translation'},
+    ],
+    'templates': [
+        {
+            'name': 'Recognition',
+            'qfmt': LANG1,
+            'afmt': '{{{{FrontSide}}}}<hr>' + LANG2,
+        },
+        {
+            'name': 'Production',
+            'qfmt': LANG2,
+            'afmt': '{{{{FrontSide}}}}<hr>' + LANG1,
+        },
+    ],
+    'css': '.meta {font-size: smaller; font-style: italic; color: gray;}',
+}
+SUFFIX = '.apkg'
+MAX = 2 ** 63 - 1
 
 
 class Command(BaseCommand):
     help = "Export sentences into an Anki 2.1 deck (.apkg)"
 
+    def anki_id(self, name):
+        result = int.from_bytes(sha256(name.encode()).digest()) % MAX
+        self.stdout.write(f'Generated Anki ID {result} for name "{name}"')
+        return result
+
     def add_arguments(self, parser):
         parser.add_argument(
-            'first_language',
+            'deck',
             type=str,
-            help='Language code of the dictionary words',
-        )
-        parser.add_argument(
-            'second_language',
-            type=str,
-            help='Language code of the translation',
+            choices=DECKS,
+            help='Which deck to export',
         )
 
     def handle(self, *args, **options):
-        output = OUTPUT.format(id=DECK_ID[options['first_language']])
-        locale = normalize(options['first_language']).split('.')[0]
+        languages = options['deck'].split('-')[1].split('_')
+        for template in TEMPLATE['templates']:
+            for key in 'qfmt', 'afmt':
+                template[key] = template[key].format(
+                    locale=normalize(languages[0]).split('.')[0]
+                )
+        deck = Deck(deck_id=self.anki_id(options['deck']), name=options['deck'])
+        model_name = MODEL.format(language=languages[0])
         model = Model(
-            model_id=MODEL_ID,
-            name='Eleri Default Model',
-            fields=[
-                {'name': 'Word'},
-                {'name': 'Frequency'},
-                {'name': 'Sentence'},
-                {'name': 'Translation'},
-            ],
-            templates=[
-                {
-                    'name': 'Eleri Default Note',
-                    'qfmt': f'''
-                        <div class="meta">{{{{Word}}}} ({{{{Frequency}}}})</div>
-                        <hr>
-                        {{{{Sentence}}}}
-                        <br>
-                        {{{{tts {locale}:Sentence}}}}
-                    ''',
-                    'afmt': '{{FrontSide}}<hr>{{Translation}}',
-                },
-            ],
-            css='''
-                .meta{
-                    font-size: smaller;
-                    font-style: italic;
-                    color: gray;
-                }
-            '''
-        )
-        name = (
-            'Eleri ' +
-            options["first_language"] +
-            '-' +
-            options["second_language"]
-        )
-        deck = Deck(
-            deck_id=DECK_ID[options['first_language']],
-            name=name,
+            model_id=self.anki_id(model_name),
+            name=model_name,
+            fields=TEMPLATE['fields'],
+            templates=TEMPLATE['templates'],
+            css=TEMPLATE['css'],
         )
         count = 0
         for word in Word.objects.filter(
-            language=options['first_language'],
-            sentence__translations__language=options['second_language'],
+            language=languages[0],
+            sentence__translations__language=languages[1],
         ).order_by('-frequency', '-lemma__frequency'):
+            frequency = f'''
+                {'na' if word.frequency is None else word.frequency} /
+                {
+                    'na' if word.lemma is None or word.lemma.frequency is None
+                    else word.lemma.frequency
+                }
+            '''
             deck.add_note(
                 Note(
                     model=model,
                     fields=[
                         word.form,
-                        str(word.frequency),
+                        frequency,
                         word.sentence_set.first().text,
                         word.sentence_set.first().translations.first().text,
                     ],
                 )
             )
             count += 1
+        self.stdout.write(f'Prepared {count} notes')
+        output = f'{options['deck']}-{VERSION}{SUFFIX}'
         Package(deck).write_to_file(output)
         self.stdout.write(
-            self.style.SUCCESS(f"Exported {count} notes to {output}")
+            self.style.SUCCESS(f'Exported {count} notes to {output}')
         )
