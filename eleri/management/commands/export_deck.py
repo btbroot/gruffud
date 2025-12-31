@@ -10,10 +10,10 @@ from eleri import VERSION
 from eleri.models import Word
 
 
-DECKS = [
-    'eleri_deck_frequency_list-fi_ru',
-    'eleri_deck_phrasal_verbs-en_ru',
-]
+DECKS = {
+    'eleri_deck_frequency_list-fi_ru': 'Eleri Frequency List Finnish-Russian',
+    'eleri_deck_phrasal_verbs-en_ru': 'Eleri Phrasal Verbs English-Russian',
+}
 LANG1 = '''
     <div class="meta">{{{{Word}}}} ({{{{Frequency}}}})<hr></div>
     {{{{Sentence}}}}<br>{{{{tts {locale}:Sentence}}}}
@@ -68,7 +68,10 @@ class Command(BaseCommand):
                 template[key] = template[key].format(
                     locale=normalize(languages[0]).split('.')[0]
                 )
-        deck = Deck(deck_id=self.anki_id(options['deck']), name=options['deck'])
+        deck = Deck(
+            deck_id=self.anki_id(options['deck']),
+            name=DECKS[options['deck']],
+        )
         model_name = MODEL.format(language=languages[0])
         model = Model(
             model_id=self.anki_id(model_name),
